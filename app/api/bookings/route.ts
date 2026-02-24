@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+export const dynamic = 'force-static';
+
 let bookings: any[] = [];
 
 export async function GET(request: NextRequest) {
