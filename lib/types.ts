@@ -88,6 +88,37 @@ export interface AdminAction {
   sessionToken: string;
 }
 
+// Audit log entry for detailed tracking
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  user: string;
+  actionType: 'LOGIN' | 'LOGOUT' | 'BOOKING_CREATED' | 'BOOKING_UPDATED' | 'BOOKING_CANCELLED' | 'BOOKING_RESCHEDULED' | 'PAYMENT_RECEIVED' | 'AVAILABILITY_CHANGED' | 'SERVICE_PAUSED' | 'SETTINGS_UPDATED' | 'OVERBOOKED' | 'OVERBOOKING_RESOLVED';
+  target: string;
+  before?: string;
+  after?: string;
+  reason?: string;
+  ipAddress: string;
+  sessionToken: string;
+}
+
+// Calendar view types
+export type CalendarView = 'month' | 'week' | 'day';
+
+export interface CalendarBooking {
+  booking: Booking;
+  position: number; // For overlapping bookings
+  totalOverlapping: number;
+}
+
+// Service pause status
+export interface ServicePause {
+  serviceId: string;
+  pausedAt: string;
+  pausedUntil?: string;
+  reason?: string;
+}
+
 // Working hours configuration
 export interface WorkingHours {
   day: number; // 0-6 (Sunday-Saturday)
@@ -96,10 +127,19 @@ export interface WorkingHours {
   closeTime: string; // HH:mm
 }
 
+// Date-specific time slots
+export interface DateSpecificSlot {
+  date: string; // ISO date string
+  timeSlots: string[]; // Available time slots for this date
+  isFullyBooked?: boolean;
+  note?: string;
+}
+
 // Availability settings
 export interface AvailabilitySettings {
   workingHours: WorkingHours[];
   blockedDates: string[]; // ISO date strings
+  dateSpecificSlots: DateSpecificSlot[]; // Custom time slots for specific dates
   leadTimeDays: number;
   maxBookingsPerSlot: number;
   bufferTimeMinutes: number;

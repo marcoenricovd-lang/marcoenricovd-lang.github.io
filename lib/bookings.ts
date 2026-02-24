@@ -6,18 +6,26 @@ const BOOKINGS_KEY = 'stylash_bookings';
 const AVAILABILITY_KEY = 'stylash_availability';
 const OVERBOOKING_KEY = 'stylash_overbooking';
 
+// Default time slots
+export const DEFAULT_TIME_SLOTS = [
+  '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
+  '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
+  '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00'
+];
+
 // Default availability settings
 export const DEFAULT_AVAILABILITY: AvailabilitySettings = {
   workingHours: [
-    { day: 0, isOpen: true, openTime: '09:00', closeTime: '17:00' }, // Sunday
-    { day: 1, isOpen: true, openTime: '09:00', closeTime: '17:00' }, // Monday
-    { day: 2, isOpen: true, openTime: '09:00', closeTime: '17:00' }, // Tuesday
-    { day: 3, isOpen: true, openTime: '09:00', closeTime: '17:00' }, // Wednesday
-    { day: 4, isOpen: true, openTime: '09:00', closeTime: '17:00' }, // Thursday
-    { day: 5, isOpen: true, openTime: '09:00', closeTime: '17:00' }, // Friday
-    { day: 6, isOpen: true, openTime: '09:00', closeTime: '17:00' }, // Saturday
+    { day: 0, isOpen: false, openTime: '09:00', closeTime: '17:00' }, // Sunday - closed
+    { day: 1, isOpen: true, openTime: '09:00', closeTime: '18:00' }, // Monday
+    { day: 2, isOpen: true, openTime: '09:00', closeTime: '18:00' }, // Tuesday
+    { day: 3, isOpen: true, openTime: '09:00', closeTime: '18:00' }, // Wednesday
+    { day: 4, isOpen: true, openTime: '09:00', closeTime: '18:00' }, // Thursday
+    { day: 5, isOpen: true, openTime: '09:00', closeTime: '18:00' }, // Friday
+    { day: 6, isOpen: true, openTime: '09:00', closeTime: '18:00' }, // Saturday
   ],
   blockedDates: [],
+  dateSpecificSlots: [], // Custom time slots for specific dates
   leadTimeDays: 1, // No same-day bookings
   maxBookingsPerSlot: 1,
   bufferTimeMinutes: 0,
@@ -60,14 +68,20 @@ export function getBookedSlots(date: string): string[] {
     .map(b => b.timeSlot);
 }
 
-// Check if a time slot is available
-export function isSlotAvailable(date: string, timeSlot: string): boolean {
+// Get available time slots for a date
+export function getAvailableTimeSlots(date: string): string[] {
   const availability = getAvailabilitySettings();
-  const bookings = getBookingsByDate(date);
+  
+  // Check if date has specific slots defined
+  const dateSpecific = availability.dateSpecificSlots.find(s => s.date === date);
+  if (dateSpecific) {
+    if (dateSpecific.isFullyBooked) return [];
+    return dateSpecific.timeSlots;
+  }
   
   // Check if date is blocked
   if (availability.blockedDates.includes(date)) {
-    return false;
+    return [];
   }
   
   // Check working hours
@@ -76,13 +90,37 @@ export function isSlotAvailable(date: string, timeSlot: string): boolean {
   const workingDay = availability.workingHours.find(w => w.day === dayOfWeek);
   
   if (!workingDay || !workingDay.isOpen) {
-    return false;
+    return [];
   }
   
-  // Check if time is within working hours
-  if (timeSlot < workingDay.openTime || timeSlot > workingDay.closeTime) {
-    return false;
+  // Generate slots from working hours
+  const slots: string[] = [];
+  const startHour = parseInt(workingDay.openTime.split(':')[0]);
+  const startMin = parseInt(workingDay.openTime.split(':')[1]);
+  const endHour = parseInt(workingDay.closeTime.split(':')[0]);
+  const endMin = parseInt(workingDay.closeTime.split(':')[1]);
+  
+  let currentHour = startHour;
+  let currentMin = startMin;
+  
+  while (currentHour < endHour || (currentHour === endHour && currentMin < endMin)) {
+    const timeStr = `${currentHour.toString().padStart(2, '0')}:${currentMin.toString().padStart(2, '0')}`;
+    slots.push(timeStr);
+    
+    currentMin += 30;
+    if (currentMin >= 60) {
+      currentMin = 0;
+      currentHour++;
+    }
   }
+  
+  return slots;
+}
+
+// Check if a time slot is available
+export function isSlotAvailable(date: string, timeSlot: string): boolean {
+  const availability = getAvailabilitySettings();
+  const bookings = getBookingsByDate(date);
   
   // Check lead time
   const today = new Date();
@@ -94,13 +132,74 @@ export function isSlotAvailable(date: string, timeSlot: string): boolean {
     return false;
   }
   
-  // Count bookings for this slot
-  const slotBookings = bookings.filter(
+  // Get available slots for this date
+  const availableSlots = getAvailableTimeSlots(date);
+  
+  // Check if this time slot is in the available list
+  if (!availableSlots.includes(timeSlot)) {
+    return false;
+  }
+  
+  // Check if there's already a booking for this slot (ONLY 1 booking per slot allowed)
+  const existingBooking = bookings.find(
     b => b.timeSlot === timeSlot && 
     ['pending_payment', 'awaiting_verification', 'confirmed'].includes(b.status)
   );
   
-  return slotBookings.length < availability.maxBookingsPerSlot;
+  // Return false if ANY booking exists for this slot
+  return !existingBooking;
+}
+
+// Set custom time slots for a specific date
+export function setDateSpecificSlots(date: string, timeSlots: string[], note?: string): void {
+  const availability = getAvailabilitySettings();
+  
+  const existingIndex = availability.dateSpecificSlots.findIndex(s => s.date === date);
+  const newSlot: import('./types').DateSpecificSlot = {
+    date,
+    timeSlots,
+    note,
+    isFullyBooked: false,
+  };
+  
+  if (existingIndex >= 0) {
+    availability.dateSpecificSlots[existingIndex] = newSlot;
+  } else {
+    availability.dateSpecificSlots.push(newSlot);
+  }
+  
+  updateAvailabilitySettings(availability);
+  logAdminAction('SET_DATE_SLOTS', { date, timeSlots, note });
+}
+
+// Remove custom time slots for a date
+export function removeDateSpecificSlots(date: string): void {
+  const availability = getAvailabilitySettings();
+  availability.dateSpecificSlots = availability.dateSpecificSlots.filter(s => s.date !== date);
+  updateAvailabilitySettings(availability);
+  logAdminAction('REMOVE_DATE_SLOTS', { date });
+}
+
+// Mark a date as fully booked (but keep it visible)
+export function markDateFullyBooked(date: string, note?: string): void {
+  const availability = getAvailabilitySettings();
+  
+  const existingIndex = availability.dateSpecificSlots.findIndex(s => s.date === date);
+  const newSlot: import('./types').DateSpecificSlot = {
+    date,
+    timeSlots: [],
+    isFullyBooked: true,
+    note: note || 'Fully booked',
+  };
+  
+  if (existingIndex >= 0) {
+    availability.dateSpecificSlots[existingIndex] = newSlot;
+  } else {
+    availability.dateSpecificSlots.push(newSlot);
+  }
+  
+  updateAvailabilitySettings(availability);
+  logAdminAction('MARK_FULLY_BOOKED', { date, note });
 }
 
 // Create a new booking
@@ -317,7 +416,17 @@ export function rescheduleBooking(
 export function getAvailabilitySettings(): AvailabilitySettings {
   if (typeof window === 'undefined') return DEFAULT_AVAILABILITY;
   const stored = localStorage.getItem(AVAILABILITY_KEY);
-  return stored ? JSON.parse(stored) : DEFAULT_AVAILABILITY;
+  if (!stored) return DEFAULT_AVAILABILITY;
+  
+  const parsed = JSON.parse(stored);
+  
+  // Merge with defaults to ensure new fields exist
+  return {
+    ...DEFAULT_AVAILABILITY,
+    ...parsed,
+    // Ensure dateSpecificSlots exists (for backward compatibility)
+    dateSpecificSlots: parsed.dateSpecificSlots || [],
+  };
 }
 
 // Update availability settings

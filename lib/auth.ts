@@ -220,9 +220,15 @@ export function updateActivity(): void {
 export function logoutAdmin(): void {
   if (typeof window === 'undefined') return;
   
-  const session = getSession();
-  if (session) {
-    logAdminAction('LOGOUT', { sessionToken: session.sessionToken });
+  // Get session directly from storage to avoid infinite loop with getSession()
+  const stored = localStorage.getItem(SESSION_KEY);
+  if (stored) {
+    try {
+      const session: AdminSession = JSON.parse(stored);
+      logAdminAction('LOGOUT', { sessionToken: session.sessionToken });
+    } catch {
+      // Ignore parsing errors
+    }
   }
   
   localStorage.removeItem(SESSION_KEY);
@@ -269,10 +275,82 @@ export function getLoginAttemptsForDisplay(): LoginAttempt[] {
   return getLoginAttempts().slice(-20).reverse(); // Last 20, most recent first
 }
 
+// Audit log storage key
+const AUDIT_LOG_KEY = 'stylash_audit_log';
+
+// Get audit log entries
+export function getAuditLog(): import('./types').AuditLogEntry[] {
+  if (typeof window === 'undefined') return [];
+  const stored = localStorage.getItem(AUDIT_LOG_KEY);
+  return stored ? JSON.parse(stored) : [];
+}
+
+// Add audit log entry
+export function addAuditLogEntry(entry: Omit<import('./types').AuditLogEntry, 'id'>): void {
+  if (typeof window === 'undefined') return;
+  
+  const logs = getAuditLog();
+  const newEntry: import('./types').AuditLogEntry = {
+    ...entry,
+    id: `audit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+  };
+  
+  logs.push(newEntry);
+  
+  // Keep only last 1000 entries
+  if (logs.length > 1000) {
+    logs.splice(0, logs.length - 1000);
+  }
+  
+  localStorage.setItem(AUDIT_LOG_KEY, JSON.stringify(logs));
+}
+
+// Get login activity for security panel
+export function getLoginActivity(): import('./types').LoginAttempt[] {
+  return getLoginAttempts();
+}
+
+// Get active sessions (simplified - in real app would track multiple devices)
+export function getActiveSessions(): { token: string; ip: string; startedAt: string }[] {
+  if (typeof window === 'undefined') return [];
+  
+  const stored = localStorage.getItem(SESSION_KEY);
+  if (!stored) return [];
+  
+  try {
+    const session: import('./types').AdminSession = JSON.parse(stored);
+    return [{
+      token: session.sessionToken,
+      ip: session.ipAddress,
+      startedAt: session.loggedInAt,
+    }];
+  } catch {
+    return [];
+  }
+}
+
+// Force logout a session
+export function forceLogoutSession(token: string): void {
+  if (typeof window === 'undefined') return;
+  
+  const stored = localStorage.getItem(SESSION_KEY);
+  if (stored) {
+    try {
+      const session: import('./types').AdminSession = JSON.parse(stored);
+      if (session.sessionToken === token) {
+        logoutAdmin();
+      }
+    } catch {
+      // Ignore parsing errors
+    }
+  }
+}
+
 // Clear all auth data (for testing)
 export function clearAllAuthData(): void {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(SESSION_KEY);
   localStorage.removeItem(LOGIN_ATTEMPTS_KEY);
   localStorage.removeItem(ADMIN_ACTIONS_KEY);
+  localStorage.removeItem(AUDIT_LOG_KEY);
 }
