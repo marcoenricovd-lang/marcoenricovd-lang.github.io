@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 255, 245, 250;
+  --background-end-rgb: 255, 240, 245;
+}
+
+@layer base {
+  body {
+    color: rgb(var(--foreground-rgb));
+    font-family: var(--font-inter), system-ui, sans-serif;
+    background: linear-gradient(
+      to bottom,
+      rgb(var(--background-start-rgb)),
+      rgb(var(--background-end-rgb))
+    );
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-playfair), Georgia, serif;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-pink-600 text-white px-8 py-3 rounded-full font-medium 
+           hover:bg-pink-700 transition-all duration-300 
+           hover:shadow-lg hover:shadow-pink-600/30;
+  }
+  
+  .btn-secondary {
+    @apply border-2 border-pink-600 text-pink-600 px-8 py-3 rounded-full font-medium 
+           hover:bg-pink-600 hover:text-white transition-all duration-300;
+  }
+  
+  .section-heading {
+    @apply text-4xl md:text-5xl font-bold text-center mb-4;
+  }
+  
+  .section-subheading {
+    @apply text-lg text-gray-600 text-center max-w-2xl mx-auto;
+  }
+  
+  .gradient-text {
+    @apply bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text text-transparent;
+  }
+  
+  .card-glass {
+    @apply bg-white/80 backdrop-blur-md rounded-2xl shadow-xl border border-white/20;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #fce7f3;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #db2777;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #be185d;
+}
